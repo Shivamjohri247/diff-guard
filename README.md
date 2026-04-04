@@ -19,7 +19,7 @@ diff-guard answers that question. Every commit.
 ## 30-Second Demo
 
 ```bash
-$ diff-guard check --scope "fix login form validation"
+$ diffguard-cli check --scope "fix login form validation"
 
 ╭──────────────────────────────────────────────────────────╮
 │                 diff-guard blast radius                  │
@@ -65,13 +65,13 @@ Risk level: ⚠️  REVIEW (score: 0.54)
 ## Install
 
 ```bash
-pip install diff-guard
+pip install diffguard-cli
 ```
 
 Then set up the pre-commit hook:
 
 ```bash
-diff-guard install
+diffguard-cli install
 ```
 
 Every commit will now be automatically checked. Use `--no-verify` to skip when needed.
@@ -152,70 +152,70 @@ Every time you (or an AI agent) run `git commit`, diff-guard runs a 6-stage pipe
 
 ## Commands
 
-### `diff-guard check`
+### `diffguard-cli check`
 
 Full blast radius analysis of code changes.
 
 ```bash
 # Check staged changes (default)
-diff-guard check
+diffguard-cli check
 
 # Check with explicit scope
-diff-guard check --scope "add user authentication"
+diffguard-cli check --scope "add user authentication"
 
 # Check last commit
-diff-guard check --last-commit
+diffguard-cli check --last-commit
 
 # Check diff against a branch
-diff-guard check --diff main
+diffguard-cli check --diff main
 
 # Output formats
-diff-guard check --json
-diff-guard check --markdown
+diffguard-cli check --json
+diffguard-cli check --markdown
 
 # Fail on specific risk level
-diff-guard check --fail-on review
+diffguard-cli check --fail-on review
 ```
 
-### `diff-guard test`
+### `diffguard-cli test`
 
 Suggest tests for changed files. Zero false-positive risk — purely maps changes to tests.
 
 ```bash
 # Suggest tests for staged changes
-diff-guard test
+diffguard-cli test
 
 # Get just the test command
-diff-guard test --command-only
+diffguard-cli test --command-only
 
 # JSON output
-diff-guard test --json
+diffguard-cli test --json
 ```
 
-### `diff-guard install`
+### `diffguard-cli install`
 
 Install as a git pre-commit hook.
 
 ```bash
 # Install with defaults (fail on 'danger')
-diff-guard install
+diffguard-cli install
 
 # Stricter: fail on 'review'
-diff-guard install --fail-on review
+diffguard-cli install --fail-on review
 
 # Test-only mode (just suggest tests, never block)
-diff-guard install --mode test-only
+diffguard-cli install --mode test-only
 
 # Uninstall
-diff-guard install --uninstall
+diffguard-cli install --uninstall
 ```
 
-### `diff-guard init`
+### `diffguard-cli init`
 
 Create a `.diff-guard.yml` config file with sensible defaults.
 
 ```bash
-diff-guard init
+diffguard-cli init
 ```
 
 ---
@@ -292,7 +292,7 @@ git add -A && git commit -m "changes"
 ## Configuration
 
 diff-guard reads `.diff-guard.yml` from your repository root.
-Generate one with `diff-guard init`.
+Generate one with `diffguard-cli init`.
 
 ```yaml
 # diff-guard configuration
@@ -389,11 +389,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install diff-guard
+      - run: pip install diffguard-cli
 
       - name: Check blast radius
         run: |
-          diff-guard check \
+          diffguard-cli check \
             --diff origin/${{ github.base_ref }} \
             --fail-on review \
             --markdown \
@@ -416,7 +416,7 @@ jobs:
       - name: Suggest tests
         if: always()
         run: |
-          diff-guard test \
+          diffguard-cli test \
             --diff origin/${{ github.base_ref }} \
             --json
 ```
@@ -428,7 +428,7 @@ jobs:
 | Language | Strategy | Notes |
 |----------|----------|-------|
 | Python | AST (stdlib) | Full import graph, function mapping |
-| JavaScript/TypeScript | Generic (regex) | Full support with `pip install diff-guard[js]` (tree-sitter) |
+| JavaScript/TypeScript | Generic (regex) | Full support with `pip install diffguard-cli[js]` (tree-sitter) |
 | Go | Generic (regex) | Import patterns + function detection |
 | Rust | Generic (regex) | `use` statements + `fn` detection |
 | Java | Generic (regex) | Import + method detection |
@@ -442,19 +442,19 @@ jobs:
 
 | What | Command |
 |------|---------|
-| Install hook | `diff-guard install` |
-| Stricter hook | `diff-guard install --fail-on review` |
-| Test-only hook | `diff-guard install --mode test-only` |
-| Uninstall hook | `diff-guard install --uninstall` |
-| Check staged | `diff-guard check` |
-| Check with scope | `diff-guard check --scope "fix auth"` |
-| Check last commit | `diff-guard check --last-commit` |
-| Check vs branch | `diff-guard check --diff main` |
-| JSON for scripts | `diff-guard check --json` |
-| Markdown for PR | `diff-guard check --markdown` |
-| Suggest tests | `diff-guard test` |
-| Just test command | `diff-guard test --command-only` |
-| Create config | `diff-guard init` |
+| Install hook | `diffguard-cli install` |
+| Stricter hook | `diffguard-cli install --fail-on review` |
+| Test-only hook | `diffguard-cli install --mode test-only` |
+| Uninstall hook | `diffguard-cli install --uninstall` |
+| Check staged | `diffguard-cli check` |
+| Check with scope | `diffguard-cli check --scope "fix auth"` |
+| Check last commit | `diffguard-cli check --last-commit` |
+| Check vs branch | `diffguard-cli check --diff main` |
+| JSON for scripts | `diffguard-cli check --json` |
+| Markdown for PR | `diffguard-cli check --markdown` |
+| Suggest tests | `diffguard-cli test` |
+| Just test command | `diffguard-cli test --command-only` |
+| Create config | `diffguard-cli init` |
 | Skip hook | `git commit --no-verify` |
 
 ---
