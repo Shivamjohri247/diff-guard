@@ -44,7 +44,8 @@ Thumbs.db
 .diff-guard-prompt
 .diff-guard-learned.yml
 
-# Docs build
+# Docs
+docs/
 _site/
 
 # Claude Code settings (contains tokens)
