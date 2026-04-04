@@ -8,19 +8,39 @@ version = "0.1.0"
 description = "Blast radius analyzer for AI-generated code changes. Catches the butterfly effect before you commit."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
-authors = [{ name = "diff-guard contributors" }]
-keywords = ["git", "diff", "ai", "coding-agent", "blast-radius", "code-review", "pre-commit"]
+authors = [{ name = "Shivam Johri", email = "shivamjohri247@gmail.com" }]
+keywords = [
+    "git",
+    "diff",
+    "ai",
+    "coding-agent",
+    "blast-radius",
+    "code-review",
+    "pre-commit",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Quality Assurance",
+    "Environment :: Console",
 ]
 
 # Zero mandatory external dependencies — uses only Python stdlib
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Shivamjohri247/diff-guard"
+Repository = "https://github.com/Shivamjohri247/diff-guard"
+Issues = "https://github.com/Shivamjohri247/diff-guard/issues"
+Changelog = "https://github.com/Shivamjohri247/diff-guard/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 js = [
