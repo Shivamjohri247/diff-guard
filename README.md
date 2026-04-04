@@ -1,5 +1,7 @@
 # diff-guard
 
+[![PyPI version](https://img.shields.io/pypi/v/diffguard-cli.svg)](https://pypi.org/project/diffguard-cli/)
+
 **Stop AI coding agents from breaking things they weren't asked to touch.**
 
 diff-guard is a blast radius analyzer for AI-generated code changes. It detects unintended modifications, measures their downstream impact, and blocks dangerous commits before they reach production.
@@ -67,6 +69,8 @@ Risk level: ⚠️  REVIEW (score: 0.54)
 ```bash
 pip install diffguard-cli
 ```
+
+> View on [PyPI](https://pypi.org/project/diffguard-cli/)
 
 Then set up the pre-commit hook:
 
