@@ -1,0 +1,64 @@
+# ci_integration.yml - GitHub Actions workflow for diff-guard
+#
+# Add this as .github/workflows/diff-guard.yml in your repository.
+# It runs diff-guard on every pull request to catch unintended changes.
+
+name: diff-guard
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  blast-radius-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for accurate diff analysis
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install diff-guard
+        run: pip install diff-guard
+
+      - name: Check blast radius
+        run: |
+          # Analyze changes between the PR branch and the base branch
+          diff-guard check \
+            --diff origin/${{ github.base_ref }} \
+            --fail-on review \
+            --markdown \
+            > diff-guard-report.md
+
+          # Print the report to the job log
+          cat diff-guard-report.md
+
+      - name: Comment PR with report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report;
+            try {
+              report = fs.readFileSync('diff-guard-report.md', 'utf8');
+            } catch (e) {
+              report = 'diff-guard check did not produce a report.';
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+      - name: Suggest tests
+        if: always()
+        run: |
+          diff-guard test \
+            --diff origin/${{ github.base_ref }} \
+            --json

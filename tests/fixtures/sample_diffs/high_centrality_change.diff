@@ -1,0 +1,13 @@
+diff --git a/src/utils/validators.py b/src/utils/validators.py
+index 1234567..abcdefg 100644
+--- a/src/utils/validators.py
++++ b/src/utils/validators.py
+@@ -5,8 +5,12 @@ def validate_email(email: str) -> bool:
+-    if not email or '@' not in email:
+-        return False
+-    return True
++    if not email:
++        return False
++    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
++    import re
++    return bool(re.match(pattern, email))

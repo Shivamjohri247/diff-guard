@@ -1,0 +1,39 @@
+diff --git a/src/auth/login.py b/src/auth/login.py
+index 1234567..abcdefg 100644
+--- a/src/auth/login.py
++++ b/src/auth/login.py
+@@ -15,7 +15,9 @@ def validate_email(email: str) -> bool:
+-    return '@' in email
++    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
++    import re
++    return bool(re.match(pattern, email))
+
+diff --git a/src/auth/session.py b/src/auth/session.py
+index 2345678..bcdefgh 100644
+--- a/src/auth/session.py
++++ b/src/auth/session.py
+@@ -42,8 +42,14 @@ def create_session(user_id: str) -> Session:
+-    session = Session(user_id=user_id)
+-    return session
++    session = Session(user_id=user_id, created_at=datetime.utcnow())
++    session.refresh_token = generate_refresh_token()
++    return session
++
++def refresh_token(token: str) -> Session:
++    """Refresh an expired session token."""
++    payload = decode_jwt(token)
++    return create_session(payload["user_id"])
+
+diff --git a/src/middleware/rate_limit.py b/src/middleware/rate_limit.py
+index 3456789..cdefghi 100644
+--- a/src/middleware/rate_limit.py
++++ b/src/middleware/rate_limit.py
+@@ -10,6 +10,6 @@ def check_rate_limit(request: Request) -> bool:
+-    key = f"rate:{request.client_ip}"
+-    count = redis.incr(key)
+-    if count == 1:
+-        redis.expire(key, 60)
++    key = f"rate_limit:{request.client_ip}:{request.path}"
++    count = redis.incr(key)
++    if count == 1:
++        redis.expire(key, 60)

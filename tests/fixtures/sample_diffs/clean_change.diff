@@ -1,0 +1,18 @@
+diff --git a/src/auth/login.py b/src/auth/login.py
+index 1234567..abcdefg 100644
+--- a/src/auth/login.py
++++ b/src/auth/login.py
+@@ -15,7 +15,9 @@ def validate_email(email: str) -> bool:
+     current implementation only checks for '@' symbol.
+     """
+-    return '@' in email
++    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
++    import re
++    return bool(re.match(pattern, email))
+
+@@ -28,5 +30,6 @@ def validate_password(password: str) -> bool:
+     Must be at least 8 chars, contain upper, lower, digit.
+     """
+-    return len(password) >= 8
++    has_upper = any(c.isupper() for c in password)
++    return len(password) >= 8 and has_upper
