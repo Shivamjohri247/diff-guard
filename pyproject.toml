@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "diffguard-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "Blast radius analyzer for AI-generated code changes. Catches the butterfly effect before you commit."
 readme = "README.md"
 license = "MIT"
