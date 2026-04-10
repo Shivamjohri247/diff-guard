@@ -7,8 +7,13 @@ and other SARIF-consuming platforms.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from diff_guard.models import BlastRadiusReport
+
+# SARIF result objects are heterogeneous dicts — use ``dict[str, Any]``
+# throughout so mypy --strict is satisfied without a full SARIF typed model.
+_SarifDict = dict[str, Any]
 
 
 class SARIFReporter:
@@ -35,7 +40,7 @@ class SARIFReporter:
         }
         return json.dumps(sarif, indent=2)
 
-    def _build_rules(self) -> list[dict]:
+    def _build_rules(self) -> list[_SarifDict]:
         return [
             {
                 "id": "DG001",
@@ -63,17 +68,17 @@ class SARIFReporter:
             },
         ]
 
-    def _build_results(self, report: BlastRadiusReport) -> list[dict]:
-        results: list[dict] = []
+    def _build_results(self, report: BlastRadiusReport) -> list[_SarifDict]:
+        results: list[_SarifDict] = []
         results.extend(self._phantom_change_results(report))
         results.extend(self._downstream_impact_results(report))
         results.extend(self._regression_risk_results(report))
         results.extend(self._commit_quality_results(report))
         return results
 
-    def _phantom_change_results(self, report: BlastRadiusReport) -> list[dict]:
+    def _phantom_change_results(self, report: BlastRadiusReport) -> list[_SarifDict]:
         """DG001: Changes detected outside the intended scope."""
-        results: list[dict] = []
+        results: list[_SarifDict] = []
         for phantom in report.phantom_changes:
             level = {
                 "info": "note",
@@ -104,9 +109,9 @@ class SARIFReporter:
             )
         return results
 
-    def _downstream_impact_results(self, report: BlastRadiusReport) -> list[dict]:
+    def _downstream_impact_results(self, report: BlastRadiusReport) -> list[_SarifDict]:
         """DG002: Files affected through the import/dependency chain."""
-        results: list[dict] = []
+        results: list[_SarifDict] = []
         for impact in report.downstream_impacts:
             results.append(
                 {
@@ -129,7 +134,7 @@ class SARIFReporter:
             )
         return results
 
-    def _regression_risk_results(self, report: BlastRadiusReport) -> list[dict]:
+    def _regression_risk_results(self, report: BlastRadiusReport) -> list[_SarifDict]:
         """DG003: Overall regression risk when elevated."""
         if report.risk_level not in ("review", "danger"):
             return []
@@ -146,7 +151,7 @@ class SARIFReporter:
             }
         ]
 
-    def _commit_quality_results(self, report: BlastRadiusReport) -> list[dict]:
+    def _commit_quality_results(self, report: BlastRadiusReport) -> list[_SarifDict]:
         """DG004: Low quality or vague commit message."""
         quality = report.commit_message_quality
         if not quality or quality.score >= 0.5:

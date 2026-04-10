@@ -56,7 +56,9 @@ class FileGraph:
 
         source_files = self._discover_source_files()
         # Cache analyzers by language to avoid re-creating per file
-        _analyzers: dict[str, object] = {}
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        _analyzers: dict[str, PythonASTAnalyzer | GenericAnalyzer] = {}
 
         for abs_path in source_files:
             rel = self._normalize(abs_path)
