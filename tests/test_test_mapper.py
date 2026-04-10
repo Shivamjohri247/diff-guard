@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from diff_guard.core.test_mapper import TestMapper
-from diff_guard.models import Change, ChangeType, Hunk, TestConfig, TestSuggestion
-
+from diff_guard.models import Change, ChangeType, TestSuggestion
 
 # ---------------------------------------------------------------------------
 # Lightweight FileGraph stub for testing import-chain discovery
@@ -100,7 +97,8 @@ class TestFunctionMatch:
     def test_finds_test_by_function_name(self, simple_python_project: Path) -> None:
         mapper = TestMapper(simple_python_project)
         results = mapper.find_tests_by_function("login")
-        # tests/test_login.py contains test_login, tests/auth/test_login.py contains test_login_in_auth_dir
+        # tests/test_login.py contains test_login,
+        # tests/auth/test_login.py contains test_login_in_auth_dir
         assert "tests/test_login.py" in results
 
     def test_no_match_returns_empty(self, simple_python_project: Path) -> None:
@@ -122,9 +120,7 @@ class TestDeduplication:
 
         # tests/test_login.py may be found via name match AND function match;
         # it should appear only once with the highest confidence
-        login_suggestions = [
-            s for s in suggestions if s.test_file == "tests/test_login.py"
-        ]
+        login_suggestions = [s for s in suggestions if s.test_file == "tests/test_login.py"]
         assert len(login_suggestions) == 1
         assert login_suggestions[0].confidence >= 0.9
 

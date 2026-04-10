@@ -5,6 +5,8 @@ from enum import Enum
 
 
 class ChangeType(Enum):
+    """Type of change detected in a file."""
+
     ADDED = "added"
     MODIFIED = "modified"
     DELETED = "deleted"
@@ -13,6 +15,8 @@ class ChangeType(Enum):
 
 @dataclass
 class Hunk:
+    """A contiguous block of lines changed in a diff."""
+
     old_start: int
     old_count: int
     new_start: int
@@ -23,6 +27,8 @@ class Hunk:
 
 @dataclass
 class Change:
+    """Represents a single file change from a diff."""
+
     file_path: str
     change_type: ChangeType
     hunks: list[Hunk]
@@ -38,6 +44,8 @@ class Change:
 
 @dataclass
 class IntendedScope:
+    """The developer's intended scope of changes."""
+
     description: str
     target_files: set[str] = field(default_factory=set)
     target_functions: set[str] = field(default_factory=set)
@@ -48,6 +56,8 @@ class IntendedScope:
 
 @dataclass
 class PhantomChange:
+    """A change that falls outside the intended scope."""
+
     file_path: str
     reason: str
     relevance_score: float
@@ -60,6 +70,8 @@ class PhantomChange:
 
 @dataclass
 class DownstreamImpact:
+    """A file affected indirectly through the import/dependency chain."""
+
     file_path: str
     distance: int
     via_files: list[str]
@@ -68,6 +80,8 @@ class DownstreamImpact:
 
 @dataclass
 class TestSuggestion:
+    """A test file matched to a changed source file."""
+
     test_file: str
     changed_file: str
     match_reason: str
@@ -76,6 +90,8 @@ class TestSuggestion:
 
 @dataclass
 class BlastRadiusReport:
+    """Complete blast radius analysis report."""
+
     changed_files: list[Change]
     intended_scope: IntendedScope
     phantom_changes: list[PhantomChange]
@@ -83,10 +99,24 @@ class BlastRadiusReport:
     risk_score: float
     risk_level: str  # "safe" | "review" | "danger"
     suggested_tests: list[TestSuggestion]
+    commit_message_quality: CommitMessageQuality | None = None
+
+
+@dataclass
+class CommitMessageQuality:
+    """Quality assessment of a commit message."""
+
+    message: str
+    score: float  # 0.0 (terrible) to 1.0 (good)
+    issues: list[str] = field(default_factory=list)
+    is_vague: bool = False
+    suggested_improvement: str | None = None
 
 
 @dataclass
 class Thresholds:
+    """Numeric thresholds used for risk classification."""
+
     phantom_relevance: float = 0.3
     risk_safe: float = 0.3
     risk_danger: float = 0.6
@@ -94,6 +124,8 @@ class Thresholds:
 
 @dataclass
 class TestConfig:
+    """Configuration for test file discovery and command generation."""
+
     directories: list[str] = field(
         default_factory=lambda: ["tests/", "test/", "__tests__/", "spec/"]
     )
@@ -105,6 +137,8 @@ class TestConfig:
 
 @dataclass
 class ScopeConfig:
+    """Configuration for scope inference from prompt files."""
+
     prompt_files: list[str] = field(
         default_factory=lambda: [".diff-guard-prompt", ".claude-prompt", ".cursor-prompt"]
     )
@@ -113,6 +147,8 @@ class ScopeConfig:
 
 @dataclass
 class HookConfig:
+    """Configuration for running as a git pre-commit hook."""
+
     fail_on: str = "danger"
     auto_test: bool = False
     show_report: bool = True
@@ -121,14 +157,11 @@ class HookConfig:
 
 @dataclass
 class DiffGuardConfig:
+    """Top-level configuration for diff-guard."""
+
     thresholds: Thresholds = field(default_factory=Thresholds)
     ignore: list[str] = field(default_factory=list)
     tests: TestConfig = field(default_factory=TestConfig)
     scope: ScopeConfig = field(default_factory=ScopeConfig)
     hook: HookConfig = field(default_factory=HookConfig)
     languages: dict[str, dict[str, str]] = field(default_factory=dict)
-
-
-class ExampleAddon:
-    """Example addon for testing."""
-    name: str = "test"

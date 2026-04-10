@@ -3,16 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from diff_guard.core.scope_analyzer import ScopeResolver
 from diff_guard.models import Change, ChangeType, DiffGuardConfig, ScopeConfig
 from diff_guard.utils.prompt_extractor import find_prompt_file, read_prompt_file
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_change(file_path: str, functions: list[str] | None = None) -> Change:
     return Change(
@@ -28,6 +26,7 @@ def _make_change(file_path: str, functions: list[str] | None = None) -> Change:
 # ---------------------------------------------------------------------------
 # prompt_extractor tests
 # ---------------------------------------------------------------------------
+
 
 class TestFindPromptFile:
     def test_finds_first_matching_file(self, tmp_path: Path) -> None:
@@ -68,6 +67,7 @@ class TestReadPromptFile:
 # ScopeResolver priority tests
 # ---------------------------------------------------------------------------
 
+
 class TestScopeResolverPriority:
     def test_prompt_file_priority(self, tmp_path: Path) -> None:
         """Prompt file is used with confidence 1.0."""
@@ -88,7 +88,9 @@ class TestScopeResolverPriority:
 
     def test_commit_message_fallback(self, tmp_path: Path) -> None:
         """Commit message is used when no prompt file and no CLI, confidence 0.6."""
-        with patch("diff_guard.utils.git.get_commit_message", return_value="fix login form validation"):
+        with patch(
+            "diff_guard.utils.git.get_commit_message", return_value="fix login form validation"
+        ):
             resolver = ScopeResolver(tmp_path)
             scope = resolver.resolve()
         assert scope.confidence == 0.6
@@ -138,6 +140,7 @@ class TestScopeResolverPriority:
 # Keyword extraction
 # ---------------------------------------------------------------------------
 
+
 class TestKeywordExtraction:
     def test_keyword_extraction(self, tmp_path: Path) -> None:
         """'fix login form validation' produces expected keywords."""
@@ -163,6 +166,7 @@ class TestKeywordExtraction:
 # Keyword-to-file mapping
 # ---------------------------------------------------------------------------
 
+
 class TestKeywordToFileMapping:
     def test_keyword_to_file_mapping(self, tmp_path: Path) -> None:
         """'login' keyword maps to files containing 'login' in path."""
@@ -181,6 +185,7 @@ class TestKeywordToFileMapping:
 # ---------------------------------------------------------------------------
 # _parse_scope_text
 # ---------------------------------------------------------------------------
+
 
 class TestParseScopeText:
     def test_extracts_files(self, tmp_path: Path) -> None:
@@ -208,6 +213,7 @@ class TestParseScopeText:
 # ---------------------------------------------------------------------------
 # _enrich_with_project_areas
 # ---------------------------------------------------------------------------
+
 
 class TestEnrichWithProjectAreas:
     def test_enrich_with_project_areas(self, tmp_path: Path) -> None:

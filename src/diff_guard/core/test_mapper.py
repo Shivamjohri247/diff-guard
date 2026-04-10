@@ -77,7 +77,7 @@ class TestMapper:
                 match_stem = tf_stem
                 for prefix in ("test_", "test-"):
                     if match_stem.startswith(prefix):
-                        match_stem = match_stem[len(prefix):]
+                        match_stem = match_stem[len(prefix) :]
                         break
                 for suffix in ("_test", "-test"):
                     if match_stem.endswith(suffix):
@@ -161,7 +161,7 @@ class TestMapper:
             match_stem = tf_stem
             for prefix in ("test_", "test-"):
                 if match_stem.startswith(prefix):
-                    match_stem = match_stem[len(prefix):]
+                    match_stem = match_stem[len(prefix) :]
                     break
             for suffix in ("_test", "-test"):
                 if match_stem.endswith(suffix):
@@ -231,10 +231,7 @@ class TestMapper:
 
     def _matches_test_pattern(self, filename: str) -> bool:
         """Check if a filename matches any configured test pattern."""
-        for pat in self.config.patterns:
-            if self._fnmatch(filename, pat):
-                return True
-        return False
+        return any(self._fnmatch(filename, pat) for pat in self.config.patterns)
 
     def _is_test_file(self, file_path: str) -> bool:
         """Check if a file path looks like a test file."""

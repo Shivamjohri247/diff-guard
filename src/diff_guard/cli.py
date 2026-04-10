@@ -1,16 +1,28 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import sys
 from dataclasses import asdict
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from diff_guard.models import (
+    BlastRadiusReport,
+    Change,
+    CommitMessageQuality,
+    DiffGuardConfig,
+    IntendedScope,
+    TestSuggestion,
+)
+
 if TYPE_CHECKING:
-    pass
+    from diff_guard.core.test_mapper import TestMapper
 
 
 def create_parser() -> argparse.ArgumentParser:
+    """Create and return the argument parser with all subcommands."""
     parser = argparse.ArgumentParser(
         prog="diff-guard",
         description="Blast radius analyzer for AI-generated code changes.",
@@ -49,6 +61,12 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Output as markdown",
+    )
+    check_parser.add_argument(
+        "--sarif",
+        action="store_true",
+        default=False,
+        help="Output as SARIF v2.1.0 for CI/CD integration",
     )
     check_parser.add_argument(
         "--fail-on",
@@ -103,6 +121,13 @@ def create_parser() -> argparse.ArgumentParser:
         default=False,
         help="Output just the test command",
     )
+    test_parser.add_argument(
+        "--ignore",
+        type=str,
+        action="append",
+        default=[],
+        help="Additional ignore patterns",
+    )
 
     # install subcommand
     install_parser = subparsers.add_parser("install", help="Install as git pre-commit hook")
@@ -133,6 +158,7 @@ def create_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Entry point for the diff-guard CLI."""
     parser = create_parser()
     args = parser.parse_args()
 
@@ -152,61 +178,43 @@ def main() -> None:
 
 def cmd_check(args: argparse.Namespace) -> int:
     """Full blast radius analysis of staged changes."""
+    from diff_guard.config import find_config
     from diff_guard.core.blast_radius import BlastRadiusAnalyzer
-    from diff_guard.core.diff_parser import (
-        parse_diff_from_ref,
-        parse_last_commit,
-        parse_staged_diff,
-    )
     from diff_guard.core.phantom_change_detector import PhantomChangeDetector
     from diff_guard.core.regression_risk_scorer import RegressionRiskScorer
     from diff_guard.core.scope_analyzer import ScopeResolver
     from diff_guard.core.test_mapper import TestMapper
-    from diff_guard.models import BlastRadiusReport
     from diff_guard.utils.file_graph import FileGraph
     from diff_guard.utils.git import get_repo_root
 
     repo_root = get_repo_root()
+    config = find_config(repo_root)
 
-    # 1. Determine diff source
-    if getattr(args, "last_commit", False):
-        changes = parse_last_commit(repo_root)
-    elif getattr(args, "diff", None) is not None:
-        changes = parse_diff_from_ref(args.diff, repo_root)
-    else:
-        changes = parse_staged_diff(repo_root)
-
-    # 2. No changes
-    if not changes:
-        print("No changes found.")
+    changes = _parse_and_filter_changes(args, repo_root, config)
+    if changes is None:
         return 0
 
-    # 3. Build FileGraph
-    file_graph = FileGraph(repo_root)
-    file_graph.build()
+    commit_quality = _check_commit_quality(repo_root, changes)
 
-    # 4. Resolve scope
+    file_graph = FileGraph(repo_root)
+    file_graph.build_cached()
+
     cli_scope: str | None = getattr(args, "scope", None)
-    scope_resolver = ScopeResolver(repo_root)
+    scope_resolver = ScopeResolver(repo_root, config=config)
     scope = scope_resolver.resolve(cli_scope=cli_scope, changes=changes)
 
-    # 5. Detect phantom changes
-    phantom_detector = PhantomChangeDetector(file_graph=file_graph)
+    phantom_detector = PhantomChangeDetector(file_graph=file_graph, config=config)
     phantoms = phantom_detector.detect(changes, scope)
 
-    # 6. Compute blast radius
     blast_analyzer = BlastRadiusAnalyzer(file_graph)
     downstream = blast_analyzer.analyze(changes, scope)
 
-    # 7. Score regression risk
-    risk_scorer = RegressionRiskScorer(file_graph=file_graph)
+    risk_scorer = RegressionRiskScorer(file_graph=file_graph, config=config)
     risk_score, risk_level = risk_scorer.score(changes, scope, phantoms, downstream)
 
-    # 8. Map tests
-    test_mapper = TestMapper(repo_root, file_graph=file_graph)
+    test_mapper = TestMapper(repo_root, file_graph=file_graph, config=config.tests)
     suggested_tests = test_mapper.map_changes_to_tests(changes)
 
-    # 9. Assemble report
     report = BlastRadiusReport(
         changed_files=changes,
         intended_scope=scope,
@@ -215,34 +223,157 @@ def cmd_check(args: argparse.Namespace) -> int:
         risk_score=risk_score,
         risk_level=risk_level,
         suggested_tests=suggested_tests,
+        commit_message_quality=commit_quality,
     )
 
-    # 10. Render output
-    rendered: str | None = None
-    if getattr(args, "json", False):
-        from diff_guard.reporters.json_reporter import JSONReporter
-
-        json_reporter = JSONReporter()
-        rendered = json_reporter.render_report(report)
-    elif getattr(args, "markdown", False):
-        from diff_guard.reporters.markdown_reporter import MarkdownReporter
-
-        md_reporter = MarkdownReporter()
-        rendered = md_reporter.render_report(report)
-    else:
-        from diff_guard.reporters.terminal_reporter import TerminalReporter
-
-        no_color: bool = getattr(args, "no_color", False)
-        term_reporter = TerminalReporter(no_color=no_color)
-        rendered = term_reporter.render_report(report)
-
+    rendered = _render_report(args, report)
     if rendered is not None:
         print(rendered)
 
-    # 11. Determine exit code
+    return _exit_code_for_fail_on(args, scope, risk_level)
+
+
+def cmd_test(args: argparse.Namespace) -> int:
+    """Handle 'diff-guard test' -- suggest tests for staged changes."""
+    from diff_guard.config import find_config
+    from diff_guard.core.test_mapper import TestMapper
+    from diff_guard.utils.file_graph import FileGraph
+    from diff_guard.utils.git import get_repo_root
+
+    repo_root = get_repo_root()
+    config = find_config(repo_root)
+
+    changes = _parse_and_filter_changes(args, repo_root, config)
+    if changes is None:
+        return 0
+
+    file_graph = FileGraph(repo_root)
+    file_graph.build_cached()
+
+    mapper = TestMapper(repo_root, file_graph=file_graph, config=config.tests)
+    suggestions = mapper.map_changes_to_tests(changes)
+
+    if getattr(args, "command_only", False):
+        command = mapper.suggest_test_command(suggestions)
+        if command:
+            print(command)
+        return 0
+
+    if getattr(args, "json", False):
+        _print_test_json(changes, suggestions, mapper)
+        return 0
+
+    _print_test_human(changes, suggestions, mapper)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+_CHANGE_MESSAGES = {
+    "empty": "No changes found.",
+    "filtered": "All changes filtered by ignore patterns.",
+}
+
+
+def _matches_ignore_pattern(file_path: str, pattern: str) -> bool:
+    """Check if a file path matches an ignore pattern.
+
+    Directory patterns ending with ``/`` match any file within that directory.
+    Other patterns use standard glob matching via :mod:`fnmatch`.
+    """
+    if pattern.endswith("/"):
+        return file_path.startswith(pattern) or file_path.startswith(pattern.rstrip("/"))
+    return fnmatch.fnmatch(file_path, pattern)
+
+
+def _parse_and_filter_changes(
+    args: argparse.Namespace,
+    repo_root: Path | None,
+    config: DiffGuardConfig,
+) -> list[Change] | None:
+    """Parse diff from the appropriate source and apply ignore filters.
+
+    Returns ``None`` (and prints a message) when there are no changes to analyze.
+    """
+    from diff_guard.core.diff_parser import (
+        parse_diff_from_ref,
+        parse_last_commit,
+        parse_staged_diff,
+    )
+
+    if getattr(args, "last_commit", False):
+        changes = parse_last_commit(repo_root)
+    elif getattr(args, "diff", None) is not None:
+        changes = parse_diff_from_ref(args.diff, repo_root)
+    else:
+        changes = parse_staged_diff(repo_root)
+
+    if not changes:
+        print(_CHANGE_MESSAGES["empty"])
+        return None
+
+    ignore_patterns = list(config.ignore) + list(getattr(args, "ignore", []))
+    if ignore_patterns:
+        changes = [
+            c
+            for c in changes
+            if not any(_matches_ignore_pattern(c.file_path, pat) for pat in ignore_patterns)
+        ]
+
+    if not changes:
+        print(_CHANGE_MESSAGES["filtered"])
+        return None
+
+    return changes
+
+
+def _check_commit_quality(
+    repo_root: Path | None, changes: list[Change]
+) -> CommitMessageQuality | None:
+    """Best-effort commit message quality check."""
+    try:
+        from diff_guard.core.commit_message_checker import check_commit_message
+        from diff_guard.utils.git import get_staged_commit_message
+
+        commit_msg = get_staged_commit_message(repo_root)
+        if commit_msg:
+            return check_commit_message(commit_msg, changes)
+    except (ImportError, OSError, ValueError):
+        pass  # Best-effort, don't block the pipeline
+    return None
+
+
+def _render_report(args: argparse.Namespace, report: BlastRadiusReport) -> str | None:
+    """Select and run the appropriate reporter based on CLI flags."""
+    if getattr(args, "sarif", False):
+        from diff_guard.reporters.sarif_reporter import SARIFReporter
+
+        return SARIFReporter().render_report(report)
+    if getattr(args, "json", False):
+        from diff_guard.reporters.json_reporter import JSONReporter
+
+        return JSONReporter().render_report(report)
+    if getattr(args, "markdown", False):
+        from diff_guard.reporters.markdown_reporter import MarkdownReporter
+
+        return MarkdownReporter().render_report(report)
+
+    from diff_guard.reporters.terminal_reporter import TerminalReporter
+
+    no_color: bool = getattr(args, "no_color", False)
+    return TerminalReporter(no_color=no_color).render_report(report)
+
+
+def _exit_code_for_fail_on(
+    args: argparse.Namespace,
+    scope: IntendedScope,
+    risk_level: str,
+) -> int:
+    """Determine exit code based on --fail-on and scope confidence."""
     fail_on: str | None = getattr(args, "fail_on", None)
 
-    # Amendment 6: if scope confidence < 0.4, never exit non-zero
     if scope.confidence < 0.4:
         return 0
 
@@ -256,68 +387,34 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_test(args: argparse.Namespace) -> int:
-    """Handle 'diff-guard test' -- suggest tests for staged changes."""
-    from diff_guard.core.diff_parser import (
-        parse_diff_from_ref,
-        parse_last_commit,
-        parse_staged_diff,
-    )
-    from diff_guard.core.test_mapper import TestMapper
-    from diff_guard.utils.file_graph import FileGraph
-    from diff_guard.utils.git import get_repo_root
+def _print_test_json(
+    changes: list[Change],
+    suggestions: list[TestSuggestion],
+    mapper: TestMapper,
+) -> None:
+    """Print test suggestions as JSON."""
+    output = {
+        "changed_files": [
+            {
+                "path": c.file_path,
+                "type": c.change_type.value,
+                "added_lines": c.added_lines,
+                "removed_lines": c.removed_lines,
+            }
+            for c in changes
+        ],
+        "test_suggestions": [asdict(s) for s in suggestions],
+        "test_command": mapper.suggest_test_command(suggestions),
+    }
+    print(json.dumps(output, indent=2))
 
-    repo_root = get_repo_root()
 
-    # 1. Determine diff source
-    if getattr(args, "last_commit", False):
-        changes = parse_last_commit(repo_root)
-    elif getattr(args, "diff", None) is not None:
-        changes = parse_diff_from_ref(args.diff, repo_root)
-    else:
-        changes = parse_staged_diff(repo_root)
-
-    # 2. No changes
-    if not changes:
-        print("No changes found.")
-        return 0
-
-    # 3. Build FileGraph
-    file_graph = FileGraph(repo_root)
-    file_graph.build()
-
-    # 4. Create TestMapper
-    mapper = TestMapper(repo_root, file_graph=file_graph)
-
-    # 5. Map changes to tests
-    suggestions = mapper.map_changes_to_tests(changes)
-
-    # 6. --command-only
-    if getattr(args, "command_only", False):
-        command = mapper.suggest_test_command(suggestions)
-        if command:
-            print(command)
-        return 0
-
-    # 7. --json
-    if getattr(args, "json", False):
-        output = {
-            "changed_files": [
-                {
-                    "path": c.file_path,
-                    "type": c.change_type.value,
-                    "added_lines": c.added_lines,
-                    "removed_lines": c.removed_lines,
-                }
-                for c in changes
-            ],
-            "test_suggestions": [asdict(s) for s in suggestions],
-            "test_command": mapper.suggest_test_command(suggestions),
-        }
-        print(json.dumps(output, indent=2))
-        return 0
-
-    # 8. Human-readable output
+def _print_test_human(
+    changes: list[Change],
+    suggestions: list[TestSuggestion],
+    mapper: TestMapper,
+) -> None:
+    """Print test suggestions in human-readable format."""
     print("Changed files and suggested tests:\n")
     for change in changes:
         print(f"  {change.file_path} ({change.change_type.value})")
@@ -325,8 +422,7 @@ def cmd_test(args: argparse.Namespace) -> int:
         if matching:
             for sug in matching:
                 print(
-                    f"    -> {sug.test_file} "
-                    f"({sug.match_reason}, confidence: {sug.confidence:.1f})"
+                    f"    -> {sug.test_file} ({sug.match_reason}, confidence: {sug.confidence:.1f})"
                 )
         else:
             print("    -> no test files found")
@@ -337,8 +433,6 @@ def cmd_test(args: argparse.Namespace) -> int:
         print(f"Suggested test command:\n  {command}")
     else:
         print("No test files found for the changed files.")
-
-    return 0
 
 
 def cmd_install(args: argparse.Namespace) -> int:

@@ -123,8 +123,54 @@ class GenericAnalyzer:
     # Module-path resolution (stub)
     # ------------------------------------------------------------------
 
-    def resolve_module_path(self, import_path: str, project_root: Path) -> str | None:
-        """Return None.  Module resolution is language-specific."""
+    def resolve_module_path(
+        self, import_path: str, project_root: Path, source_file: str = ""
+    ) -> str | None:
+        """Resolve an import path to a file path relative to project_root.
+
+        Supports JavaScript/TypeScript relative imports.  Other languages
+        return ``None`` (resolution is not yet implemented).
+        """
+        # JS/TS relative imports
+        if import_path.startswith(".") or import_path.startswith("/"):
+            return self._resolve_js_path(import_path, project_root, source_file)
+
+        return None
+
+    def _resolve_js_path(
+        self, import_path: str, project_root: Path, source_file: str = ""
+    ) -> str | None:
+        """Resolve a JS/TS relative import path to a file."""
+        resolved_root = project_root.resolve()
+
+        # Resolve relative to the importing file's directory
+        if source_file and import_path.startswith("."):
+            source_dir = resolved_root / Path(source_file).parent
+            abs_resolved = (source_dir / import_path).resolve()
+            try:
+                rel_resolved = abs_resolved.relative_to(resolved_root)
+            except ValueError:
+                return None
+        else:
+            abs_resolved = resolved_root / import_path
+            rel_resolved = Path(import_path)
+
+        # Try exact path
+        if abs_resolved.is_file():
+            return rel_resolved.as_posix()
+
+        # Try with extensions
+        for ext in (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"):
+            candidate = abs_resolved.with_suffix(ext)
+            if candidate.is_file():
+                return str(candidate.relative_to(resolved_root).as_posix())
+
+        # Try index files in directory
+        for ext in (".js", ".jsx", ".ts", ".tsx"):
+            index = abs_resolved / f"index{ext}"
+            if index.is_file():
+                return str(index.relative_to(resolved_root).as_posix())
+
         return None
 
     # ------------------------------------------------------------------
@@ -172,9 +218,10 @@ class GenericAnalyzer:
 
         for line in source.splitlines():
             stripped = line.strip()
-            if not stripped or stripped.startswith("//") or stripped.startswith("#"):
-                if language not in ("c", "cpp"):
-                    continue
+            if (
+                not stripped or stripped.startswith("//") or stripped.startswith("#")
+            ) and language not in ("c", "cpp"):
+                continue
             for pattern in patterns:
                 m = pattern.search(stripped)
                 if m:
@@ -299,7 +346,9 @@ class GenericAnalyzer:
             re.compile(r"""import\s+.*?\s+from\s+['"](?P<path>[^'"]+)['"]"""),
             re.compile(r"""export\s+.*?\s+from\s+['"](?P<path>[^'"]+)['"]"""),
             re.compile(r"""import\s+['"](?P<path>[^'"]+)['"]"""),
-            re.compile(r"""(?:const|let|var)\s+\w+\s*=\s*require\s*\(\s*['"](?P<path>[^'"]+)['"]\s*\)"""),
+            re.compile(
+                r"""(?:const|let|var)\s+\w+\s*=\s*require\s*\(\s*['"](?P<path>[^'"]+)['"]\s*\)"""
+            ),
         ]
 
     def _python_import_patterns(self) -> list[re.Pattern[str]]:
@@ -335,9 +384,7 @@ class GenericAnalyzer:
 
     def _java_function_patterns(self) -> list[re.Pattern[str]]:
         return [
-            re.compile(
-                r"(?:public|private|protected|static)\s+[\w<>\[\]]+\s+(?P<name>\w+)\s*\("
-            ),
+            re.compile(r"(?:public|private|protected|static)\s+[\w<>\[\]]+\s+(?P<name>\w+)\s*\("),
         ]
 
     def _ruby_function_patterns(self) -> list[re.Pattern[str]]:
@@ -350,7 +397,9 @@ class GenericAnalyzer:
             re.compile(r"function\s+(?P<name>\w+)\s*\("),
             re.compile(r"(?:const|let|var)\s+(?P<name>\w+)\s*=\s*\("),
             re.compile(r"(?:const|let|var)\s+(?P<name>\w+)\s*=\s*(?:async\s+)?\("),
-            re.compile(r"(?:const|let|var)\s+(?P<name>\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[\w]+)\s*=>"),
+            re.compile(
+                r"(?:const|let|var)\s+(?P<name>\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[\w]+)\s*=>"
+            ),
         ]
 
     def _python_function_patterns(self) -> list[re.Pattern[str]]:
@@ -367,7 +416,9 @@ class GenericAnalyzer:
             # JavaScript/TypeScript: function declarations
             re.compile(r"function\s+(?P<name>\w+)\s*\("),
             # JavaScript/TypeScript: arrow functions and const fn = (
-            re.compile(r"(?:const|let|var)\s+(?P<name>\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[\w]+)\s*=>"),
+            re.compile(
+                r"(?:const|let|var)\s+(?P<name>\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[\w]+)\s*=>"
+            ),
             re.compile(r"(?:const|let|var)\s+(?P<name>\w+)\s*=\s*(?:async\s+)?\("),
             # Rust: pub fn and fn
             re.compile(r"(?:pub\s+)?(?:async\s+)?fn\s+(?P<name>\w+)\s*[\(<]"),

@@ -4,11 +4,33 @@ import os
 from collections import deque
 from pathlib import Path
 
+from diff_guard.analyzers.language_detector import detect_language, get_analyzer
 from diff_guard.analyzers.python_analyzer import PythonASTAnalyzer
 
 # Directories to skip when walking the project tree.
 _SKIP_DIRS: frozenset[str] = frozenset(
     {"__pycache__", ".git", "node_modules", ".tox", ".eggs", "venv", ".venv", "site-packages"}
+)
+
+# Source file extensions to discover (beyond .py which is always included).
+_EXTRA_SOURCE_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+        ".ts",
+        ".tsx",
+        ".go",
+        ".rs",
+        ".java",
+        ".rb",
+        ".c",
+        ".cpp",
+        ".cc",
+        ".h",
+        ".hpp",
+    }
 )
 
 
@@ -32,8 +54,13 @@ class FileGraph:
         self._forward.clear()
         self._reverse.clear()
 
-        py_files = self._discover_python_files()
-        for abs_path in py_files:
+        source_files = self._discover_source_files()
+        # Cache analyzers by language to avoid re-creating per file
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        _analyzers: dict[str, PythonASTAnalyzer | GenericAnalyzer] = {}
+
+        for abs_path in source_files:
             rel = self._normalize(abs_path)
             self._forward.setdefault(rel, set())
 
@@ -42,9 +69,14 @@ class FileGraph:
             except (OSError, UnicodeDecodeError):
                 continue
 
-            imports = self._analyzer.extract_imports(source, rel)
+            language = detect_language(rel)
+            if language not in _analyzers:
+                _analyzers[language] = get_analyzer(language)
+            analyzer = _analyzers[language]
+
+            imports = analyzer.extract_imports(source, rel)
             for imp in imports:
-                resolved = self._analyzer.resolve_module_path(imp, self._root)
+                resolved = analyzer.resolve_module_path(imp, self._root, source_file=rel)
                 if resolved is None:
                     # Skip unresolved imports (stdlib, third-party, etc.)
                     continue
@@ -52,12 +84,43 @@ class FileGraph:
                 # Skip self-references
                 if dep == rel:
                     continue
+                # Skip if the resolved dep is not in our graph (e.g., node_modules)
                 self._forward.setdefault(rel, set()).add(dep)
                 self._reverse.setdefault(dep, set()).add(rel)
 
         # Ensure every known file has a reverse entry (even if nobody imports it)
         for file_path in self._forward:
             self._reverse.setdefault(file_path, set())
+
+    def build_cached(self) -> None:
+        """Build the graph, using a disk cache when possible.
+
+        Falls back to a full :meth:`build` on cache miss or staleness.
+        """
+        from diff_guard.utils.cache import (
+            cache_path,
+            collect_mtimes,
+            is_stale,
+            load_cache,
+            save_cache,
+        )
+
+        path = cache_path(self._root)
+
+        # Try loading from cache
+        entry = load_cache(path)
+        if entry is not None and not is_stale(entry, self._root):
+            self._forward = {k: set(v) for k, v in entry.forward.items()}
+            self._reverse = {k: set(v) for k, v in entry.reverse.items()}
+            return
+
+        # Cache miss or stale — full build
+        self.build()
+
+        # Save to cache
+        all_files = list(self._forward.keys())
+        mtimes = collect_mtimes(self._root, all_files)
+        save_cache(path, self._forward, self._reverse, mtimes)
 
     # ------------------------------------------------------------------
     # Query helpers
@@ -131,14 +194,14 @@ class FileGraph:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _discover_python_files(self) -> list[Path]:
-        """Return absolute paths to all relevant ``*.py`` files under *repo_root*."""
+    def _discover_source_files(self) -> list[Path]:
+        """Return absolute paths to all source files under *repo_root*."""
         result: list[Path] = []
         for dirpath, dirnames, filenames in os.walk(self._root):
-            # Prune skipped directories in-place so os.walk doesn't descend
             dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
             for fname in filenames:
-                if fname.endswith(".py"):
+                suffix = Path(fname).suffix.lower()
+                if suffix == ".py" or suffix in _EXTRA_SOURCE_EXTENSIONS:
                     result.append(Path(dirpath) / fname)
         return result
 

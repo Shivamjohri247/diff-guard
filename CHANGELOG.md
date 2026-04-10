@@ -4,6 +4,47 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-04-11
+
+### Added
+
+- **SARIF v2.1.0 reporter** (`--sarif`): CI/CD-ready output for GitHub Code Scanning and Azure DevOps with 4 rule IDs (DG001–DG004)
+- **Commit message quality checker**: heuristic analysis for vagueness, length, scope correlation, and conventional-commit format
+- **Disk-based FileGraph cache** (`.diff-guard-cache/graph.json`): mtime-based invalidation, survives across runs, auto-rebuilds on source changes
+- **Multi-language import resolution**: JS/TS relative imports resolved from source file directory; Go, Rust, Java, Ruby, C/C++ import patterns via regex-based generic analyzer
+- **`.diff-guard-ignore` file**: gitignore-style patterns merged into config ignore list
+- **`scope.areas` config**: define code areas with related files for richer scope enrichment
+- **Pre-commit config** (`.pre-commit-config.yaml`): ruff (lint + format), mypy, trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files
+- **CI pipeline hardening**: `ruff format --check`, expanded lint rules (B, SIM, C4), pip caching, coverage enforcement (80% threshold)
+
+### Changed
+
+- **CLI refactored**: `cmd_check` and `cmd_test` broken into focused helpers (`_parse_and_filter_changes`, `_check_commit_quality`, `_render_report`, `_exit_code_for_fail_on`, `_print_test_json`, `_print_test_human`)
+- **SARIF `_build_results` split** into 4 per-rule methods for maintainability
+- **`ScopeResolver`** now enriches scope via `config.scope.areas` definitions
+- **`FileGraph`** discovers all source languages (not just Python); uses per-language analyzers
+- **Directory ignore patterns** (ending in `/`) now correctly match files within via prefix matching, not just glob
+- **100% similar renames** now correctly detected when `git diff` omits `---`/`+++` lines
+- **Hook install** no longer duplicates `#!/bin/sh` shebangs on reinstall or when appending to existing hooks
+- **All 14 model classes** have docstrings
+- Source code cleaned of dead code (`IMPORT_PATTERNS`, `_discover_python_files`, stray comments)
+- Expanded ruff lint rules: E, F, I, W, UP, B, SIM, C4
+- 18 ruff lint violations fixed (SIM102, SIM105, SIM108, SIM110, B905, B007, E501, F821, F401)
+
+### Fixed
+
+- Pre-commit hook shebang duplication on reinstall
+- Directory ignore patterns (`src/api/`) not matching files within (`src/api/users.py`)
+- 100% similar file renames silently ignored by diff parser
+- `load_cache()` crash on non-dict JSON values (null, lists)
+
+### Tests
+
+- **468 tests** (up from 260), **92% coverage**
+- New test files: `test_cache`, `test_commit_message_checker`, `test_git`, `test_helpers`, `test_ignore_file`, `test_json_reporter`, `test_language_detector`, `test_markdown_reporter`, `test_models`, `test_pre_commit`, `test_prompt_extractor`, `test_sarif_reporter`
+- Multi-language project fixture (Python + JS + TS)
+- Comprehensive CLI E2E tests for all flag combinations and output formats
+
 ## [0.2.0] - 2026-04-05
 
 ### Changed

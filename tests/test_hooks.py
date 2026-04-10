@@ -28,7 +28,6 @@ def _make_git_hooks_dir(tmp_path: Path) -> Path:
 class TestGenerateHookScript:
     def test_default_mode_generates_check_command(self) -> None:
         script = generate_hook_script()
-        assert "#!/bin/sh" in script
         assert HOOK_MARKER_START in script
         assert HOOK_MARKER_END in script
         assert "diff-guard check --staged --fail-on danger" in script

@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import os
 import textwrap
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 from diff_guard.config import (
     config_defaults,
@@ -14,14 +10,14 @@ from diff_guard.config import (
     generate_default_config,
     parse_yaml_simple,
 )
-from diff_guard.models import DiffGuardConfig, HookConfig, ScopeConfig, TestConfig, Thresholds
+from diff_guard.models import DiffGuardConfig, HookConfig, TestConfig, Thresholds
 
 
 class TestParseYamlSimpleKeyValue:
     """parse_yaml_simple handles simple key-value pairs."""
 
     def test_string_value(self) -> None:
-        result = parse_yaml_simple('name: hello')
+        result = parse_yaml_simple("name: hello")
         assert result == {"name": "hello"}
 
     def test_integer_value(self) -> None:
@@ -333,10 +329,12 @@ class TestFindConfigPresent:
 
     def test_present_file(self, tmp_path: Path) -> None:
         config_path = tmp_path / ".diff-guard.yml"
-        config_path.write_text(textwrap.dedent("""\
+        config_path.write_text(
+            textwrap.dedent("""\
             thresholds:
               phantom_relevance: 0.5
-        """))
+        """)
+        )
         config = find_config(tmp_path)
         assert config.thresholds.phantom_relevance == 0.5
 
@@ -376,10 +374,12 @@ class TestConfigWalkUp:
     def test_walk_up(self, tmp_path: Path) -> None:
         # Create config at root
         config_path = tmp_path / ".diff-guard.yml"
-        config_path.write_text(textwrap.dedent("""\
+        config_path.write_text(
+            textwrap.dedent("""\
             thresholds:
               phantom_relevance: 0.8
-        """))
+        """)
+        )
 
         # Look from a subdirectory
         sub = tmp_path / "src" / "deep" / "nested"

@@ -17,11 +17,24 @@ class MarkdownReporter:
         # Summary
         scope_desc = report.intended_scope.description or "N/A"
         conf = report.intended_scope.confidence
-        lines.append(
-            f"**Scope**: {scope_desc} _(confidence: {conf:.2f})_"
-        )
+        lines.append(f"**Scope**: {scope_desc} _(confidence: {conf:.2f})_")
         lines.append(f"**Risk Level**: {report.risk_level} (score: {report.risk_score:.2f})")
         lines.append("")
+
+        # Commit Message Quality
+        if report.commit_message_quality:
+            q = report.commit_message_quality
+            lines.append(f"### :memo: Commit Message Quality ({q.score:.0%})")
+            lines.append("")
+            first_line = q.message.strip().split("\n", 1)[0]
+            lines.append(f"> `{first_line}`")
+            lines.append("")
+            if q.issues:
+                for issue in q.issues:
+                    lines.append(f"- {issue}")
+            if q.suggested_improvement:
+                lines.append(f"- **Suggestion**: `{q.suggested_improvement}`")
+            lines.append("")
 
         # In Scope
         scope_files = sorted(report.intended_scope.target_files)
@@ -40,10 +53,7 @@ class MarkdownReporter:
         if report.changed_files:
             for c in report.changed_files:
                 ct = c.change_type.value
-                lines.append(
-                    f"- `{c.file_path}` ({ct}, "
-                    f"+{c.added_lines}/-{c.removed_lines})"
-                )
+                lines.append(f"- `{c.file_path}` ({ct}, +{c.added_lines}/-{c.removed_lines})")
         else:
             lines.append("_No changes._")
         lines.append("")

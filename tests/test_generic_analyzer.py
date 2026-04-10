@@ -3,10 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import pytest
-
 from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
-
 
 # ======================================================================
 # Sample source code used across tests
@@ -246,7 +243,7 @@ class TestFindReferences:
             root = Path(tmp)
             (root / "code.py").write_text("my_func()\n")
             binary_path = root / "data.bin"
-            binary_path.write_bytes(b"\x00\x01\x02\x03my_func\xFF\xFE")
+            binary_path.write_bytes(b"\x00\x01\x02\x03my_func\xff\xfe")
 
             analyzer = GenericAnalyzer()
             refs = analyzer.find_references("my_func", root)

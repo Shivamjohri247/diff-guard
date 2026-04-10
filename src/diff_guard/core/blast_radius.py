@@ -19,9 +19,7 @@ class BlastRadiusAnalyzer:
     def __init__(self, file_graph: FileGraph) -> None:
         self.file_graph = file_graph
 
-    def analyze(
-        self, changes: list[Change], scope: IntendedScope
-    ) -> list[DownstreamImpact]:
+    def analyze(self, changes: list[Change], scope: IntendedScope) -> list[DownstreamImpact]:
         """For each changed file, find downstream dependents not in the change set."""
         changed_paths: list[str] = [c.file_path for c in changes]
         raw = self.find_all_downstream(changed_paths)
@@ -50,29 +48,25 @@ class BlastRadiusAnalyzer:
         for src in changed_files:
             # BFS over *reverse* edges (dependents) starting from src
             visited: set[str] = {src}
-            queue: deque[tuple[str, int, list[str]]] = deque(
-                [(src, 0, [src])]
-            )
+            queue: deque[tuple[str, int, list[str]]] = deque([(src, 0, [src])])
 
             while queue:
                 current, dist, path = queue.popleft()
-                if dist > 0:
-                    # current is a downstream dependent of src
-                    if current not in changed_set:
-                        d_factor = self.score_distance(dist)
-                        c_factor = self.score_centrality(current)
-                        # Normalise centrality factor by max_centrality
-                        norm_centrality = c_factor / max_centrality if max_centrality > 0 else 0.0
-                        risk = d_factor * (0.5 + 0.5 * norm_centrality)
+                if dist > 0 and current not in changed_set:
+                    d_factor = self.score_distance(dist)
+                    c_factor = self.score_centrality(current)
+                    # Normalise centrality factor by max_centrality
+                    norm_centrality = c_factor / max_centrality if max_centrality > 0 else 0.0
+                    risk = d_factor * (0.5 + 0.5 * norm_centrality)
 
-                        existing = best.get(current)
-                        if existing is None or risk > existing.risk_contribution:
-                            best[current] = DownstreamImpact(
-                                file_path=current,
-                                distance=dist,
-                                via_files=list(path),
-                                risk_contribution=risk,
-                            )
+                    existing = best.get(current)
+                    if existing is None or risk > existing.risk_contribution:
+                        best[current] = DownstreamImpact(
+                            file_path=current,
+                            distance=dist,
+                            via_files=list(path),
+                            risk_contribution=risk,
+                        )
 
                 if dist >= max_depth:
                     continue

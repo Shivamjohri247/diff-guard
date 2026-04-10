@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from diff_guard.core.blast_radius import BlastRadiusAnalyzer
-from diff_guard.models import Change, ChangeType, Hunk, IntendedScope
+from diff_guard.models import Change, ChangeType, Hunk
 from diff_guard.utils.file_graph import FileGraph
 
 
@@ -68,7 +68,9 @@ class TestDistanceScoring:
         # api/users.py is reachable via auth/session.py -> distance=2
         assert by_file["api/users.py"].distance == 2
         # 1-hop risk should be higher than 2-hop risk
-        assert by_file["auth/session.py"].risk_contribution > by_file["api/users.py"].risk_contribution
+        assert (
+            by_file["auth/session.py"].risk_contribution > by_file["api/users.py"].risk_contribution
+        )
 
 
 class TestExcludesChangedFiles:
@@ -76,9 +78,7 @@ class TestExcludesChangedFiles:
 
     def test_excludes_changed_files(self, analyzer: BlastRadiusAnalyzer) -> None:
         # Change both session.py and users.py
-        results = analyzer.find_all_downstream(
-            ["auth/session.py", "api/users.py"], max_depth=2
-        )
+        results = analyzer.find_all_downstream(["auth/session.py", "api/users.py"], max_depth=2)
         impacted = {r.file_path for r in results}
         # The changed files themselves should not appear as downstream impacts
         assert "auth/session.py" not in impacted
