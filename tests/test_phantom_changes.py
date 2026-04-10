@@ -6,20 +6,16 @@ import pytest
 
 from diff_guard.core.diff_parser import parse_unified_diff
 from diff_guard.core.phantom_change_detector import (
-    AUTO_IGNORE_CATEGORIES,
     PhantomChangeDetector,
 )
 from diff_guard.models import (
     Change,
     ChangeType,
     DiffGuardConfig,
-    Hunk,
     IntendedScope,
-    PhantomChange,
     Thresholds,
 )
 from diff_guard.utils.file_graph import FileGraph
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -142,8 +138,8 @@ class TestAutoIgnore:
 
     def test_auto_ignore_yarn_lock(self) -> None:
         """yarn.lock is auto-ignored."""
-        change = _make_change("yarn.lock", added=20, removed=10)
-        scope = _make_scope(target_files={"src/main.ts"}, confidence=1.0)
+        _make_change("yarn.lock", added=20, removed=10)
+        _make_scope(target_files={"src/main.ts"}, confidence=1.0)
         detector = PhantomChangeDetector()
         ignored, reason = detector.is_auto_ignored("yarn.lock")
         assert ignored is True

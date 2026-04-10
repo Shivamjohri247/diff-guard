@@ -350,14 +350,32 @@ def find_config(repo_root: Path) -> DiffGuardConfig:
         if config_path.is_file():
             text = config_path.read_text(encoding="utf-8")
             data = parse_yaml_simple(text)
-            return config_from_dict(data)
+            config = config_from_dict(data)
+
+            # Also load .diff-guard-ignore if present
+            from diff_guard.utils.ignore_file import load_ignore_file
+
+            extra_ignores = load_ignore_file(current)
+            if extra_ignores:
+                config.ignore.extend(extra_ignores)
+
+            return config
         parent = current.parent
         if parent == current:
             # Reached filesystem root
             break
         current = parent
 
-    return config_defaults()
+    config = config_defaults()
+
+    # Even without .diff-guard.yml, check for .diff-guard-ignore
+    from diff_guard.utils.ignore_file import load_ignore_file
+
+    extra_ignores = load_ignore_file(repo_root)
+    if extra_ignores:
+        config.ignore.extend(extra_ignores)
+
+    return config
 
 
 def generate_default_config() -> str:
@@ -419,10 +437,14 @@ def generate_default_config() -> str:
     a("# Pre-commit hook settings")
     a("hook:")
     a(f'  fail_on: "{defaults.hook.fail_on}"     # safe | review | danger | never')
-    a(f"  auto_test: {str(defaults.hook.auto_test).lower()}"
-      "       # automatically run suggested tests")
-    a(f"  show_report: {str(defaults.hook.show_report).lower()}"
-      "    # show full report in hook output")
+    a(
+        f"  auto_test: {str(defaults.hook.auto_test).lower()}"
+        "       # automatically run suggested tests"
+    )
+    a(
+        f"  show_report: {str(defaults.hook.show_report).lower()}"
+        "    # show full report in hook output"
+    )
     a(f'  mode: "{defaults.hook.mode}"         # test-only | full | check-only')
     a("")
 

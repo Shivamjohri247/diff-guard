@@ -25,4 +25,3 @@ def run_as_hook(repo_root: Path | None = None, mode: str = "full", fail_on: str 
 
     result = subprocess.run(cmd, cwd=str(repo_root) if repo_root is not None else None)
     return result.returncode
-# modified by butterfly test

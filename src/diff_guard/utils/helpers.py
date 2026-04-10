@@ -7,7 +7,7 @@ def format_file_path(path: str, max_width: int = 60) -> str:
     """Truncate a file path to fit within max_width."""
     if len(path) <= max_width:
         return path
-    return "..." + path[-(max_width - 3):]
+    return "..." + path[-(max_width - 3) :]
 
 
 def pluralize(count: int, singular: str, plural: str | None = None) -> str:

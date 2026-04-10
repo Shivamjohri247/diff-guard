@@ -113,7 +113,9 @@ class PythonASTAnalyzer:
     # Module-path resolution
     # ------------------------------------------------------------------
 
-    def resolve_module_path(self, import_path: str, project_root: Path) -> str | None:
+    def resolve_module_path(
+        self, import_path: str, project_root: Path, source_file: str = ""
+    ) -> str | None:
         """Resolve a dotted import like ``'auth.login'`` to a relative file path.
 
         Returns a forward-slash path string (relative to *project_root*) or
@@ -157,11 +159,7 @@ class _ImportVisitor(ast.NodeVisitor):
             prefix = "." * node.level
             module = node.module or ""
             for alias in node.names:
-                name = (
-                    f"{prefix}{module}.{alias.name}"
-                    if module
-                    else f"{prefix}{alias.name}"
-                )
+                name = f"{prefix}{module}.{alias.name}" if module else f"{prefix}{alias.name}"
                 self.imports.append(name)
         elif node.module:
             self.imports.append(node.module)

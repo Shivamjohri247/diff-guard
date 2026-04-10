@@ -4,8 +4,6 @@ import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import pytest
-
 from diff_guard.analyzers.language_detector import (
     GenericAnalyzer,
     detect_language,
@@ -13,7 +11,6 @@ from diff_guard.analyzers.language_detector import (
     get_analyzer,
 )
 from diff_guard.analyzers.python_analyzer import PythonASTAnalyzer, map_lines_to_functions
-
 
 # ======================================================================
 # Sample source code used across tests

@@ -81,9 +81,7 @@ class PhantomChangeDetector:
     # Public API
     # ------------------------------------------------------------------
 
-    def detect(
-        self, changes: list[Change], scope: IntendedScope
-    ) -> list[PhantomChange]:
+    def detect(self, changes: list[Change], scope: IntendedScope) -> list[PhantomChange]:
         """Main entry: flag out-of-scope changes with confidence scores.
 
         Only returns phantom changes whose relevance is below the (possibly
@@ -106,9 +104,7 @@ class PhantomChangeDetector:
                         relevance_score=relevance,
                         change_summary=self._summarize(change),
                         severity="info",
-                        confidence=self.compute_confidence(
-                            change, scope, relevance
-                        ),
+                        confidence=self.compute_confidence(change, scope, relevance),
                         added_lines=change.added_lines,
                         removed_lines=change.removed_lines,
                     )
@@ -147,9 +143,7 @@ class PhantomChangeDetector:
     # Relevance scoring
     # ------------------------------------------------------------------
 
-    def compute_relevance(
-        self, change: Change, scope: IntendedScope
-    ) -> float:
+    def compute_relevance(self, change: Change, scope: IntendedScope) -> float:
         """Compute 0.0-1.0 relevance score for a change against the scope.
 
         Weighted combination of:
@@ -191,9 +185,7 @@ class PhantomChangeDetector:
     # Legitimate downstream (Amendment 3a)
     # ------------------------------------------------------------------
 
-    def is_legitimate_downstream(
-        self, file_path: str, scope: IntendedScope
-    ) -> bool:
+    def is_legitimate_downstream(self, file_path: str, scope: IntendedScope) -> bool:
         """Check if *file_path* is within 2 hops of any in-scope file."""
         if self.file_graph is None:
             return False
@@ -210,9 +202,7 @@ class PhantomChangeDetector:
     # Severity classification
     # ------------------------------------------------------------------
 
-    def classify_severity(
-        self, change: Change, relevance: float, scope: IntendedScope
-    ) -> str:
+    def classify_severity(self, change: Change, relevance: float, scope: IntendedScope) -> str:
         """Classify as ``'info'``, ``'warning'``, or ``'critical'``."""
         threshold = self._effective_threshold(scope)
         lines_changed = change.added_lines + change.removed_lines
@@ -237,9 +227,7 @@ class PhantomChangeDetector:
     # Detection confidence
     # ------------------------------------------------------------------
 
-    def compute_confidence(
-        self, change: Change, scope: IntendedScope, relevance: float
-    ) -> float:
+    def compute_confidence(self, change: Change, scope: IntendedScope, relevance: float) -> float:
         """Compute detection confidence (how sure we are this is truly unintended).
 
         - High (>= 0.9): no import-chain connection AND no path overlap AND
@@ -261,11 +249,7 @@ class PhantomChangeDetector:
             return min(0.4, max(0.1, relevance))
 
         # High confidence: truly disconnected, significant change
-        if (
-            chain_score == 0.0
-            and not path_overlap
-            and lines_changed > 3
-        ):
+        if chain_score == 0.0 and not path_overlap and lines_changed > 3:
             return 0.9 + min(0.1, (1.0 - relevance) * 0.2)
 
         # Medium confidence: some overlap but not fully in scope
@@ -311,9 +295,7 @@ class PhantomChangeDetector:
             return 0.0
         return min(1.0, overlap / total)
 
-    def _score_proximity(
-        self, file_path: str, scope: IntendedScope
-    ) -> float:
+    def _score_proximity(self, file_path: str, scope: IntendedScope) -> float:
         """Directory distance to nearest scope file.
 
         Same directory = 1.0, parent/child = 0.7, same tree = 0.3, else 0.0.
@@ -332,7 +314,7 @@ class PhantomChangeDetector:
             target_dirs = target_parts[:-1]
 
             common = 0
-            for fd, td in zip(file_dirs, target_dirs):
+            for fd, td in zip(file_dirs, target_dirs, strict=False):
                 if fd == td:
                     common += 1
                 else:
@@ -342,19 +324,14 @@ class PhantomChangeDetector:
                 score = 0.0
             else:
                 max_depth = max(len(file_dirs), len(target_dirs))
-                if max_depth == 0:
-                    score = 1.0
-                else:
-                    score = min(1.0, common / max_depth)
+                score = 1.0 if max_depth == 0 else min(1.0, common / max_depth)
 
             if score > best_score:
                 best_score = score
 
         return best_score
 
-    def _score_import_chain(
-        self, file_path: str, scope: IntendedScope
-    ) -> float:
+    def _score_import_chain(self, file_path: str, scope: IntendedScope) -> float:
         """Graph distance score: 0 hops=1.0, 1 hop=0.7, 2 hops=0.4, 3+=0.0."""
         if self.file_graph is None or not scope.target_files:
             return 0.0
@@ -397,9 +374,7 @@ class PhantomChangeDetector:
             return 0
         return self.file_graph.centrality(file_path)
 
-    def _has_n_hop_connection(
-        self, file_path: str, scope: IntendedScope, max_hops: int
-    ) -> bool:
+    def _has_n_hop_connection(self, file_path: str, scope: IntendedScope, max_hops: int) -> bool:
         """Check if *file_path* is within *max_hops* of any in-scope file."""
         if self.file_graph is None:
             return False
@@ -434,14 +409,10 @@ class PhantomChangeDetector:
         parts.append(change.file_path)
         if change.functions_modified:
             parts.append(f"(functions: {', '.join(change.functions_modified)})")
-        parts.append(
-            f"[+{change.added_lines}/-{change.removed_lines}]"
-        )
+        parts.append(f"[+{change.added_lines}/-{change.removed_lines}]")
         return " ".join(parts)
 
-    def _build_reason(
-        self, change: Change, scope: IntendedScope, relevance: float
-    ) -> str:
+    def _build_reason(self, change: Change, scope: IntendedScope, relevance: float) -> str:
         """Build a human-readable reason for why a change was flagged."""
         reasons: list[str] = []
         if self._score_explicit(change.file_path, scope) == 0.0:

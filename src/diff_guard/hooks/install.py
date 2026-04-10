@@ -10,11 +10,10 @@ HOOK_MARKER_END = "# <<< diff-guard <<<"
 
 
 def generate_hook_script(fail_on: str = "danger", mode: str = "full") -> str:
-    """Generate the shell script content for the pre-commit hook.
+    """Generate the diff-guard block for the pre-commit hook.
 
-    The script uses marker comments so that the diff-guard block can be
-    identified, replaced, or removed later without disturbing other hook
-    content that may already exist in the file.
+    The block uses marker comments so that it can be identified, replaced,
+    or removed later without disturbing other hook content.
     """
     if mode == "test-only":
         diff_guard_cmd = "diff-guard test --staged --command-only"
@@ -22,7 +21,6 @@ def generate_hook_script(fail_on: str = "danger", mode: str = "full") -> str:
         diff_guard_cmd = f"diff-guard check --staged --fail-on {fail_on}"
 
     lines = [
-        "#!/bin/sh",
         HOOK_MARKER_START,
         f"{diff_guard_cmd}",
         HOOK_MARKER_END,
@@ -63,7 +61,7 @@ def install_hook(
     if hook_path.exists():
         existing = hook_path.read_text()
         if HOOK_MARKER_START in existing:
-            # Replace the existing diff-guard block.
+            # Replace the existing diff-guard block in-place.
             before = existing[: existing.index(HOOK_MARKER_START)]
             after = existing[existing.index(HOOK_MARKER_END) + len(HOOK_MARKER_END) :]
             content = before + new_block + after
@@ -71,7 +69,8 @@ def install_hook(
             # Append with a blank separator line.
             content = existing.rstrip("\n") + "\n\n" + new_block
     else:
-        content = new_block
+        # New file: add shebang header.
+        content = "#!/bin/sh\n" + new_block
 
     hook_path.write_text(content)
     hook_path.chmod(stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)

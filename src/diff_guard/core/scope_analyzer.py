@@ -11,15 +11,81 @@ from diff_guard.utils import prompt_extractor
 # Common English stop words to filter out when extracting keywords.
 _STOP_WORDS: frozenset[str] = frozenset(
     {
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "can", "shall", "to", "of", "in", "for",
-        "on", "with", "at", "by", "from", "as", "this", "that", "these",
-        "those", "it", "its", "and", "or", "but", "if", "then", "else",
-        "when", "where", "how", "what", "which", "who", "not", "no", "all",
-        "any", "some", "each", "every", "both", "few", "more", "most",
-        "other", "into", "than", "too", "very", "just", "about", "up", "out",
-        "also", "only", "so",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "can",
+        "shall",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "this",
+        "that",
+        "these",
+        "those",
+        "it",
+        "its",
+        "and",
+        "or",
+        "but",
+        "if",
+        "then",
+        "else",
+        "when",
+        "where",
+        "how",
+        "what",
+        "which",
+        "who",
+        "not",
+        "no",
+        "all",
+        "any",
+        "some",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "into",
+        "than",
+        "too",
+        "very",
+        "just",
+        "about",
+        "up",
+        "out",
+        "also",
+        "only",
+        "so",
     }
 )
 
@@ -133,10 +199,7 @@ class ScopeResolver:
                 all_functions.add(func)
 
         # Most-changed directory is the root of intent
-        if dir_counts:
-            primary_dir = dir_counts.most_common(1)[0][0]
-        else:
-            primary_dir = ""
+        primary_dir = dir_counts.most_common(1)[0][0] if dir_counts else ""
 
         # Extract module names from paths
         concepts: set[str] = set()
@@ -148,9 +211,7 @@ class ScopeResolver:
                     concepts.add(stem.lower())
 
         description = (
-            f"Changes concentrated in {primary_dir}"
-            if primary_dir
-            else "Inferred from diff"
+            f"Changes concentrated in {primary_dir}" if primary_dir else "Inferred from diff"
         )
 
         scope = IntendedScope(
@@ -175,7 +236,7 @@ class ScopeResolver:
         # Extract file-like patterns: paths containing / or ending in a
         # recognised source extension.
         file_pattern = re.compile(
-            r'(?:[\w./-]+/[\w./-]+\.(?:py|js|jsx|ts|tsx|go|rs|java|rb|c|cpp|h|hpp)'
+            r"(?:[\w./-]+/[\w./-]+\.(?:py|js|jsx|ts|tsx|go|rs|java|rb|c|cpp|h|hpp)"
             r"|[\w.-]+\.(?:py|js|jsx|ts|tsx|go|rs|java|rb|c|cpp|h|hpp))"
         )
         for match in file_pattern.finditer(text):
@@ -220,20 +281,20 @@ class ScopeResolver:
         try:
             for dirpath, dirnames, filenames in os.walk(self.repo_root):
                 dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
-                rel_dir = os.path.relpath(dirpath, self.repo_root)
+                rel_dir = str(Path(dirpath).relative_to(self.repo_root))
 
                 # Match directory names
                 for part in Path(rel_dir).parts:
                     if part.lower() in keyword_set:
                         for fname in filenames:
                             if Path(fname).suffix.lower() in _SOURCE_EXTENSIONS:
-                                matched.add(os.path.join(rel_dir, fname))
+                                matched.add((Path(rel_dir) / fname).as_posix())
 
                 # Match file stems
                 for fname in filenames:
                     stem = Path(fname).stem.lower()
                     if stem in keyword_set:
-                        matched.add(os.path.join(rel_dir, fname))
+                        matched.add((Path(rel_dir) / fname).as_posix())
         except OSError:
             pass
 

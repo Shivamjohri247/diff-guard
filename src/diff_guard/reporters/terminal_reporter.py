@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import TYPE_CHECKING
 
 from diff_guard.models import (
     BlastRadiusReport,
@@ -11,6 +12,9 @@ from diff_guard.models import (
     PhantomChange,
     TestSuggestion,
 )
+
+if TYPE_CHECKING:
+    from diff_guard.models import CommitMessageQuality
 
 
 class TerminalReporter:
@@ -61,28 +65,21 @@ class TerminalReporter:
             )
         )
 
-        sections.append(
-            self.render_risk_gauge(report.risk_score, report.risk_level)
-        )
+        sections.append(self.render_risk_gauge(report.risk_score, report.risk_level))
 
-        sections.append(
-            self.render_in_scope(report.changed_files, report.intended_scope)
-        )
+        if report.commit_message_quality:
+            sections.append(self.render_commit_quality(report.commit_message_quality))
+
+        sections.append(self.render_in_scope(report.changed_files, report.intended_scope))
 
         if report.phantom_changes:
-            sections.append(
-                self.render_phantom_changes(report.phantom_changes)
-            )
+            sections.append(self.render_phantom_changes(report.phantom_changes))
 
         if report.downstream_impacts:
-            sections.append(
-                self.render_blast_radius(report.downstream_impacts)
-            )
+            sections.append(self.render_blast_radius(report.downstream_impacts))
 
         command = self._build_test_command(report.suggested_tests)
-        sections.append(
-            self.render_test_suggestions(report.suggested_tests, command)
-        )
+        sections.append(self.render_test_suggestions(report.suggested_tests, command))
 
         sections.append(self.render_recommendation(report))
 
@@ -103,9 +100,7 @@ class TerminalReporter:
             "review": (self.YELLOW, "REVIEW"),
             "danger": (self.RED, "DANGER"),
         }
-        color, label = risk_level_map.get(
-            scope.source, (self.YELLOW, scope.source.upper())
-        )
+        color, label = risk_level_map.get(scope.source, (self.YELLOW, scope.source.upper()))
         # For header we re-derive risk from the scope param – callers
         # typically pass a full report; here we accept separate params.
         # We use a reasonable default.
@@ -117,9 +112,7 @@ class TerminalReporter:
         if len(scope_text) > 58:
             scope_text = scope_text[:55] + "..."
         lines.append(scope_text)
-        lines.append(
-            f"Files changed: {file_count}  |  Lines: +{added} / -{removed}"
-        )
+        lines.append(f"Files changed: {file_count}  |  Lines: +{added} / -{removed}")
 
         return self._box(lines, width=60)
 
@@ -148,9 +141,9 @@ class TerminalReporter:
         level_label = level_map.get(level, level.upper())
 
         icon_map: dict[str, str] = {
-            "safe": "\u2705",       # check mark
+            "safe": "\u2705",  # check mark
             "review": "\u26a0\ufe0f",  # warning
-            "danger": "\U0001f4a5",   # collision
+            "danger": "\U0001f4a5",  # collision
         }
         icon = icon_map.get(level, "")
 
@@ -160,15 +153,36 @@ class TerminalReporter:
 
         return gauge_line + "\n" + bar_line
 
-    def render_in_scope(
-        self, changes: list[Change], scope: IntendedScope
-    ) -> str:
+    def render_commit_quality(self, quality: CommitMessageQuality) -> str:
+        """Render commit message quality assessment."""
+
+        if quality.score >= 0.7:
+            icon = "\u2705"  # check
+            color = self.GREEN
+        elif quality.score >= 0.4:
+            icon = "\u26a0\ufe0f"  # warning
+            color = self.YELLOW
+        else:
+            icon = "\u274c"  # cross
+            color = self.RED
+
+        header = f"{icon} Commit message quality: {self._color(f'{quality.score:.0%}', color)}"
+        lines: list[str] = [header]
+
+        first_line = quality.message.strip().split("\n", 1)[0]
+        lines.append(f'   "{first_line}"')
+
+        for issue in quality.issues:
+            lines.append(f"   - {issue}")
+
+        if quality.suggested_improvement:
+            lines.append(f"   Suggestion: {quality.suggested_improvement}")
+
+        return "\n".join(lines)
+
+    def render_in_scope(self, changes: list[Change], scope: IntendedScope) -> str:
         """Render green section: files within scope."""
-        in_scope = [
-            c
-            for c in changes
-            if c.file_path in scope.target_files
-        ]
+        in_scope = [c for c in changes if c.file_path in scope.target_files]
         if not in_scope:
             # If no explicit target files, treat all changed files as in-scope
             in_scope = list(changes)
@@ -192,8 +206,7 @@ class TerminalReporter:
         """Render yellow/red section with confidence display."""
         count_label = "file" if len(phantoms) == 1 else "files"
         header = self._color(
-            f"\u26a0\ufe0f  Phantom changes "
-            f"({len(phantoms)} {count_label}):",
+            f"\u26a0\ufe0f  Phantom changes ({len(phantoms)} {count_label}):",
             self.YELLOW,
         )
         lines: list[str] = [header]
@@ -232,9 +245,7 @@ class TerminalReporter:
 
         return "\n".join(lines)
 
-    def render_test_suggestions(
-        self, suggestions: list[TestSuggestion], command: str
-    ) -> str:
+    def render_test_suggestions(self, suggestions: list[TestSuggestion], command: str) -> str:
         """Render test command and file mapping."""
         header = "\U0001f9ea Suggested tests to run:"
         lines: list[str] = [header]
@@ -250,9 +261,7 @@ class TerminalReporter:
         if suggestions:
             lines.append("")
             for sug in suggestions:
-                lines.append(
-                    f"   {sug.test_file:<32} <- {sug.changed_file}  ({sug.match_reason})"
-                )
+                lines.append(f"   {sug.test_file:<32} <- {sug.changed_file}  ({sug.match_reason})")
 
         return "\n".join(lines)
 
@@ -293,21 +302,9 @@ class TerminalReporter:
         """Draw a box using Unicode box-drawing characters."""
         inner_width = width - 2  # subtract the two vertical bars
 
-        top = (
-            self.TOP_LEFT
-            + self.HORIZONTAL * inner_width
-            + self.TOP_RIGHT
-        )
-        bottom = (
-            self.BOTTOM_LEFT
-            + self.HORIZONTAL * inner_width
-            + self.BOTTOM_RIGHT
-        )
-        tee = (
-            self.TEE_RIGHT
-            + self.HORIZONTAL * inner_width
-            + self.TEE_LEFT
-        )
+        top = self.TOP_LEFT + self.HORIZONTAL * inner_width + self.TOP_RIGHT
+        bottom = self.BOTTOM_LEFT + self.HORIZONTAL * inner_width + self.BOTTOM_RIGHT
+        tee = self.TEE_RIGHT + self.HORIZONTAL * inner_width + self.TEE_LEFT
 
         boxed_lines: list[str] = [top]
         for i, line in enumerate(lines):

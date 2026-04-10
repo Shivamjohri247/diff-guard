@@ -43,6 +43,7 @@ Thumbs.db
 # diff-guard runtime files
 .diff-guard-prompt
 .diff-guard-learned.yml
+.diff-guard-cache/
 
 # Docs
 docs/

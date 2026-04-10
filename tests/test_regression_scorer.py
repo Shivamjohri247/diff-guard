@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
-
-import pytest
 
 from diff_guard.core.regression_risk_scorer import (
     _WEIGHT_CENTRALITY,
@@ -24,7 +21,6 @@ from diff_guard.models import (
     Thresholds,
 )
 from diff_guard.utils.file_graph import FileGraph
-
 
 # ---------------------------------------------------------------------------
 # Helpers

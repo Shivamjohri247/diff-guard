@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 
 import pytest
 
@@ -16,7 +15,6 @@ from diff_guard.models import (
     TestSuggestion,
 )
 from diff_guard.reporters.terminal_reporter import TerminalReporter
-
 
 # ---------------------------------------------------------------------------
 # Sample data factories
@@ -189,9 +187,7 @@ class TestRenderInScope:
             ),
             _change("src/auth/forms.py", 20, 5, ["LoginForm()"]),
         ]
-        scope = _scope(
-            target_files={"src/auth/login.py", "src/auth/forms.py"}
-        )
+        scope = _scope(target_files={"src/auth/login.py", "src/auth/forms.py"})
         result = reporter.render_in_scope(changes, scope)
         assert "In scope" in result
         assert "2 files" in result
@@ -214,7 +210,11 @@ class TestRenderBlastRadius:
     def test_render_blast_radius_tree(self, reporter: TerminalReporter) -> None:
         impacts = [
             _downstream("src/api/users.py", distance=1, via_files=["src/auth/session.py"]),
-            _downstream("src/api/dashboard.py", distance=2, via_files=["src/auth/session.py", "src/api/users.py"]),
+            _downstream(
+                "src/api/dashboard.py",
+                distance=2,
+                via_files=["src/auth/session.py", "src/api/users.py"],
+            ),
         ]
         result = reporter.render_blast_radius(impacts)
         assert "Downstream blast radius" in result
@@ -265,6 +265,90 @@ class TestReportWidth:
         for line in result.split("\n"):
             # Allow a small margin for box edges and tree characters
             assert len(line) <= 90, f"Line too long ({len(line)}): {line!r}"
+
+
+class TestRenderCommitQuality:
+    def test_high_score_green(self, reporter: TerminalReporter) -> None:
+        from diff_guard.models import CommitMessageQuality
+
+        quality = CommitMessageQuality(
+            message="feat: add user authentication module",
+            score=0.9,
+            issues=[],
+            is_vague=False,
+            suggested_improvement=None,
+        )
+        result = reporter.render_commit_quality(quality)
+        assert "90%" in result
+        assert "feat: add user authentication module" in result
+
+    def test_medium_score_yellow(self, reporter: TerminalReporter) -> None:
+        from diff_guard.models import CommitMessageQuality
+
+        quality = CommitMessageQuality(
+            message="update app",
+            score=0.5,
+            issues=["No conventional commit prefix"],
+            is_vague=False,
+            suggested_improvement="feat: update app logic",
+        )
+        result = reporter.render_commit_quality(quality)
+        assert "50%" in result
+        assert "No conventional commit prefix" in result
+        assert "Suggestion: feat: update app logic" in result
+
+    def test_low_score_red(self, reporter: TerminalReporter) -> None:
+        from diff_guard.models import CommitMessageQuality
+
+        quality = CommitMessageQuality(
+            message="fix",
+            score=0.2,
+            issues=["Message is too short", "Contains vague words"],
+            is_vague=True,
+            suggested_improvement="fix: resolve auth edge case",
+        )
+        result = reporter.render_commit_quality(quality)
+        assert "20%" in result
+        assert "Message is too short" in result
+        assert "Contains vague words" in result
+
+    def test_multiline_message_shows_first_line(self, reporter: TerminalReporter) -> None:
+        from diff_guard.models import CommitMessageQuality
+
+        quality = CommitMessageQuality(
+            message="feat: add login\n\nDetailed description here",
+            score=0.8,
+            issues=[],
+            is_vague=False,
+            suggested_improvement=None,
+        )
+        result = reporter.render_commit_quality(quality)
+        assert '"feat: add login"' in result
+        assert "Detailed description" not in result
+
+    def test_quality_in_full_report(self, reporter: TerminalReporter) -> None:
+        from diff_guard.models import CommitMessageQuality
+
+        quality = CommitMessageQuality(
+            message="fix: update validation",
+            score=0.85,
+            issues=[],
+            is_vague=False,
+            suggested_improvement=None,
+        )
+        report = BlastRadiusReport(
+            changed_files=[_change()],
+            intended_scope=_scope(),
+            phantom_changes=[],
+            downstream_impacts=[],
+            risk_score=0.1,
+            risk_level="safe",
+            suggested_tests=[],
+            commit_message_quality=quality,
+        )
+        result = reporter.render_report(report)
+        assert "Commit message quality" in result
+        assert "85%" in result
 
 
 class TestFullReport:

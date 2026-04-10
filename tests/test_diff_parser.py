@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from diff_guard.core.diff_parser import (
     _detect_modified_imports,
     _extract_function_from_header,

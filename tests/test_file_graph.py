@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from diff_guard.utils.file_graph import FileGraph
 
 
@@ -149,3 +151,180 @@ class TestBuildGraph:
         # utils/validators.py is standalone (no imports from the project)
         deps = graph.dependencies("utils/validators.py")
         assert deps == []
+
+
+class TestMultiLanguageGraph:
+    """Verify multi-language graph building with Python + JS/TS files."""
+
+    @pytest.fixture
+    def multi_lang_project(self, fixtures_dir: Path) -> Path:
+        return fixtures_dir / "multi_language_project"
+
+    def test_discovers_js_and_ts_files(self, multi_lang_project: Path) -> None:
+        graph = FileGraph(multi_lang_project)
+        graph.build()
+        files = set(graph._forward.keys())
+        assert "src/helpers.js" in files
+        assert "src/app.js" in files
+        assert "src/config.ts" in files
+        assert "src/server.ts" in files
+
+    def test_js_import_resolved(self, multi_lang_project: Path) -> None:
+        graph = FileGraph(multi_lang_project)
+        graph.build()
+        deps = graph.dependencies("src/app.js")
+        assert "src/helpers.js" in deps
+
+    def test_ts_import_resolved(self, multi_lang_project: Path) -> None:
+        graph = FileGraph(multi_lang_project)
+        graph.build()
+        deps = graph.dependencies("src/server.ts")
+        assert "src/config.ts" in deps
+
+    def test_js_dependents(self, multi_lang_project: Path) -> None:
+        graph = FileGraph(multi_lang_project)
+        graph.build()
+        dependents = graph.dependents("src/helpers.js")
+        assert "src/app.js" in dependents
+
+    def test_python_graph_unchanged(self, multi_lang_project: Path) -> None:
+        graph = FileGraph(multi_lang_project)
+        graph.build()
+        deps = graph.dependencies("src/main.py")
+        assert "src/utils.py" in deps
+
+
+class TestGenericAnalyzerResolve:
+    """Test JS/TS module path resolution in GenericAnalyzer."""
+
+    def test_resolve_relative_js_import(self, tmp_path: Path) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        (tmp_path / "helpers.js").write_text("export function add() {}")
+        analyzer = GenericAnalyzer()
+        result = analyzer.resolve_module_path("./helpers", tmp_path)
+        assert result is not None
+        assert result.replace("\\", "/") == "helpers.js"
+
+    def test_resolve_relative_ts_import(self, tmp_path: Path) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        (tmp_path / "config.ts").write_text("export const x = 1;")
+        analyzer = GenericAnalyzer()
+        result = analyzer.resolve_module_path("./config", tmp_path)
+        assert result is not None
+        assert result.replace("\\", "/") == "config.ts"
+
+    def test_resolve_index_file(self, tmp_path: Path) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        utils_dir = tmp_path / "utils"
+        utils_dir.mkdir()
+        (utils_dir / "index.js").write_text("export {}")
+        analyzer = GenericAnalyzer()
+        result = analyzer.resolve_module_path("./utils", tmp_path)
+        assert result is not None
+        assert "utils" in result and "index.js" in result
+
+    def test_non_relative_import_returns_none(self, tmp_path: Path) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        analyzer = GenericAnalyzer()
+        result = analyzer.resolve_module_path("react", tmp_path)
+        assert result is None
+
+    def test_resolve_exact_extension(self, tmp_path: Path) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        (tmp_path / "helpers.js").write_text("export {}")
+        analyzer = GenericAnalyzer()
+        result = analyzer.resolve_module_path("./helpers.js", tmp_path)
+        assert result is not None
+
+    def test_resolve_from_subdirectory(self, tmp_path: Path) -> None:
+        """Relative import resolved from source file's directory, not project root."""
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "app.js").write_text("import {}")
+        (src / "helpers.js").write_text("export {}")
+        analyzer = GenericAnalyzer()
+        result = analyzer.resolve_module_path("./helpers", tmp_path, source_file="src/app.js")
+        assert result is not None
+        assert "helpers.js" in result
+
+    def test_resolve_outside_project_returns_none(self, tmp_path: Path) -> None:
+        """Imports that resolve outside project root should return None."""
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "app.js").write_text("import {}")
+        analyzer = GenericAnalyzer()
+        result = analyzer.resolve_module_path("../../outside", tmp_path, source_file="src/app.js")
+        assert result is None
+
+    def test_resolve_nonexistent_file(self, tmp_path: Path) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        analyzer = GenericAnalyzer()
+        result = analyzer.resolve_module_path("./nonexistent", tmp_path)
+        assert result is None
+
+
+class TestGenericAnalyzerEdgeCases:
+    """Edge case tests for the generic analyzer."""
+
+    def test_extract_functions_empty_source(self) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        analyzer = GenericAnalyzer()
+        assert analyzer.extract_functions("") == []
+
+    def test_extract_imports_unknown_language(self) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        analyzer = GenericAnalyzer()
+        # Unknown extension falls through to generic patterns
+        result = analyzer.extract_imports("import foo.bar", "readme.txt")
+        # Generic pattern should match "import foo.bar"
+        assert "foo.bar" in result
+
+    def test_extract_functions_python_syntax(self) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        source = "def hello():\n    pass\ndef world():\n    pass"
+        analyzer = GenericAnalyzer()
+        funcs = analyzer.extract_functions(source)
+        names = [f[0] for f in funcs]
+        assert "hello" in names
+        assert "world" in names
+
+    def test_extract_functions_go_syntax(self) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        source = "func main() {\n}\nfunc (s *Server) handle() {\n}"
+        analyzer = GenericAnalyzer()
+        funcs = analyzer.extract_functions(source)
+        names = [f[0] for f in funcs]
+        assert "main" in names
+        assert "handle" in names
+
+    def test_extract_classes_returns_empty(self) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        analyzer = GenericAnalyzer()
+        assert analyzer.extract_classes("class Foo") == []
+
+    def test_extract_calls_returns_empty(self) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        analyzer = GenericAnalyzer()
+        assert analyzer.extract_calls("foo()") == []
+
+    def test_line_to_function_empty_source(self) -> None:
+        from diff_guard.analyzers.generic_analyzer import GenericAnalyzer
+
+        analyzer = GenericAnalyzer()
+        assert analyzer.line_to_function("", [1, 2]) == []

@@ -27,16 +27,6 @@ EXTENSION_MAP: dict[str, str] = {
     ".hpp": "cpp",
 }
 
-# Import patterns for detecting modified imports
-IMPORT_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"^\+\s*(?:import\s+\S+|from\s+\S+\s+import\s+)"),
-    re.compile(r"^\-\s*(?:import\s+\S+|from\s+\S+\s+import\s+)"),
-    re.compile(r"^\+\s*(?:import\s+.*from\s+['\"].*['\"]|const\s+\w+\s*=\s*require\s*\()"),
-    re.compile(r"^\-\s*(?:import\s+.*from\s+['\"].*['\"]|const\s+\w+\s*=\s*require\s*\()"),
-    re.compile(r"^\+\s*(?:export\s+)"),
-    re.compile(r"^\-\s*(?:export\s+)"),
-]
-
 
 def detect_language(file_path: str) -> str:
     """Detect language from file extension."""
@@ -99,7 +89,7 @@ def _parse_file_section(section: str) -> Change | None:
     if change_type == ChangeType.RENAMED:
         for line in lines:
             if line.startswith("rename from "):
-                old_path = line[len("rename from "):]
+                old_path = line[len("rename from ") :]
                 break
 
     # Parse hunks
@@ -165,6 +155,16 @@ def _extract_file_paths(lines: list[str]) -> tuple[str | None, ChangeType]:
             if p != "/dev/null":
                 # Strip b/ prefix
                 new_path = p[2:] if p.startswith("b/") else p
+
+    # Fallback: parse "a/X b/Y" header when ---/+++ are absent
+    # (happens with 100% similar renames; the "diff --git " prefix
+    # was already consumed by re.split).
+    if new_path is None and old_path is None and lines:
+        header = lines[0]
+        m = re.match(r"a/(.*) b/(.*)", header)
+        if m:
+            old_path = m.group(1)
+            new_path = m.group(2)
 
     if new_path is None:
         if old_path is not None:
@@ -255,10 +255,6 @@ def _detect_modified_imports(added_lines: list[str], removed_lines: list[str]) -
 
     for line in added_lines + removed_lines:
         stripped = line.strip()
-        for pattern in IMPORT_PATTERNS:
-            # We already know the line starts with import/from/const/export
-            # because we collected only +/- lines
-            pass
 
         # Python imports
         py_import = re.match(r"^(?:import\s+(\S+)|from\s+(\S+)\s+import\s+(.+))", stripped)
